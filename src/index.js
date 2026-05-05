@@ -29,12 +29,12 @@ const RedditPlugin = {
             api.log("[RedditPlugin] Failed to subscribe to settings changes (non-fatal):", e);
         }
 
-        function getSubreddit(url) {
+        function getPostId(url) {
             try {
                 const u = new URL(url);
                 if (!u.hostname.endsWith("reddit.com")) return null;
-                const match = u.pathname.match(/^\/r\/([a-zA-Z0-9_]+)/i);
-                return match ? "r/" + match[1].toLowerCase() : null;
+                const match = u.pathname.match(/^\/r\/[^/]+\/comments\/([a-zA-Z0-9]+)/i);
+                return match ? match[1] : null;
             } catch (_) {}
             return null;
         }
@@ -56,19 +56,19 @@ const RedditPlugin = {
 
         const onNavigated = ({ url }) => {
             if (disposing) return;
-            const subreddit = getSubreddit(url);
+            const postId = getPostId(url);
 
-            if (subreddit) {
-                if (currentRoomCode === subreddit) return;
+            if (postId) {
+                if (currentRoomCode === postId) return;
                 if (currentRoomCode) {
-                    api.log(`[RedditPlugin] Switching subreddits: disconnecting ${currentRoomCode} before connecting ${subreddit}`);
+                    api.log(`[RedditPlugin] Switching posts: disconnecting ${currentRoomCode} before connecting ${postId}`);
                     api.sendEvent("disconnect", currentRoomCode, null);
                 }
-                currentRoomCode = subreddit;
-                api.sendEvent("connect", subreddit, null, null);
+                currentRoomCode = postId;
+                api.sendEvent("connect", postId, null, null);
             } else if (currentRoomCode) {
                 if (!disconnectOnLeave) {
-                    api.log("[RedditPlugin] Left subreddit; disconnectOnLeave=false, staying connected.");
+                    api.log("[RedditPlugin] Left post; disconnectOnLeave=false, staying connected.");
                     return;
                 }
                 emitDisconnectIfConnected("navigated-away");
@@ -77,17 +77,17 @@ const RedditPlugin = {
 
         const onTitleChanged = ({ title, url }) => {
             if (disposing) return;
-            const subreddit = getSubreddit(url);
-            if (!subreddit || subreddit !== currentRoomCode) return;
+            const postId = getPostId(url);
+            if (!postId || postId !== currentRoomCode) return;
 
             const label = cleanTitle(title);
             if (!label) return;
 
             clearTimeout(_titleDebounce);
             _titleDebounce = setTimeout(() => {
-                if (disposing || subreddit !== currentRoomCode) return;
+                if (disposing || postId !== currentRoomCode) return;
                 api.log(`[RedditPlugin] title updated: "${label}"`);
-                api.sendEvent("connect", subreddit, null, label);
+                api.sendEvent("connect", postId, null, label);
             }, 500);
         };
 
